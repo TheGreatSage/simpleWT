@@ -1,0 +1,27 @@
+# Editors
+.idea
+.VSCode
+
+# Build Stuff
+cmd/client/client
+cmd/server/server
+
+# Frontend - Also in frontend folder
+frontend/build
+frontend/node_modules
+frontend/.svelte-kit
+
+# Environment Stuff
+.env
+.env.*
+!.env.example
+
+# Windows
+.DS_Store
+
+# Logs
+*.logs
+
+# Go Workspaces
+go.work
+go.work.sum

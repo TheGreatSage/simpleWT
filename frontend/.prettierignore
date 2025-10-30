@@ -1,0 +1,19 @@
+# Package Managers
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Miscellaneous
+/static/
+
+# Node
+**/node_modules
+
+# IDE
+.idea/
+.vscode/
+
+# Generated
+/src/lib/cpnp/
