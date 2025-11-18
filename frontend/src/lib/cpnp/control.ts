@@ -5,7 +5,17 @@ export class Heartbeat extends cpnp.Struct {
   static readonly _capnp = {
     displayName: "Heartbeat",
     id: "ca523d1bb70db70d",
-    size: new cpnp.ObjectSize(0, 0),
+    size: new cpnp.ObjectSize(8, 0),
   };
+  /**
+* Milli seconds is fine as that is the default javascript
+*
+*/
+  get unix(): bigint {
+    return cpnp.utils.getInt64(0, this);
+  }
+  set unix(value: bigint) {
+    cpnp.utils.setInt64(0, value, this);
+  }
   toString(): string { return "Heartbeat_" + super.toString(); }
 }

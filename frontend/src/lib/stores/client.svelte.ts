@@ -1,49 +1,164 @@
-import type { Player } from "$lib/cpnp/game";
+import { GameClientGarbage, Player } from '$lib/cpnp/game';
+import { OpCodes } from '$lib/handlers/opcodes';
+import { Uint8ArrayConcat } from '$lib/utils/uint8array';
+import { wtStore } from './wt.svelte';
+import * as cpnp from 'capnp-es';
 
-// This should probably be a class.
-let garbageActive: boolean = $state(false);
-let garbageAmount: number = $state(0);
-let garbagePer: number = $state(0);
-let garbageBase: string = $state("");
+class GarbageStore {
+	amount: number = $state(0);
+	per: number = $state(0);
+	base: Uint8Array = $state(new Uint8Array());
+	sent: number = $state(0);
 
-let players: {[id: string]: {name: string, x: number, y: number} }= $state({});
+	wait: boolean = $state(true);
 
-// This is dumb
-let messages: string[] = $state([]);
+	#timeoutID: number | undefined = undefined;
 
-export function Client() {
-    return {
-        get messages() {
-            return messages;
-        },
-        addMessage(msg: string) {
-            messages.push(msg);
-        },
-        setGarbage(base: string, amount: number, per_second: number) {
-            garbageBase = base;
-            garbageAmount = amount;
-            garbagePer = per_second;
-            if (garbageAmount <= 0 || garbagePer <= 0) {
-                garbageActive = false;
-            } else {
-                garbageActive = true;
-            }
-        },
-        playerConnect(player: Player, connect: boolean) {
-            if (connect) {
-                players[player.id] = {
-                    name: player.name,
-                    x: player.x,
-                    y: player.y,
-                }
-                this.addMessage(`Player ${player.name} connected.`);
-            } else {
-                this.addMessage(`Player ${player.name} disconnected.`);
-                delete players[player.id];
-            }
-        },
-        set players(list: {[id: string]: {name: string, x: number, y: number} }) {
-            players = list;
-        }
-    }
+	constructor() {
+		// something
+	}
+
+	async #msg(num: number): Promise<Uint8Array> {
+		// This can't be the way to hash a function in js can it?
+		const numbarr = new TextEncoder().encode(`${num}`);
+		const msg = Uint8ArrayConcat(this.base, numbarr);
+		const hashBuf = await crypto.subtle.digest('SHA-1', msg);
+		// const hashArr = Array.from(new Uint8Array(hashBuf));
+		// const hash = hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
+		return new Uint8Array(hashBuf);
+	}
+
+	#run = () => {
+		// Miss a whole tick, oh well.
+		// This should also probably count misses.
+		if (this.wait) {
+			return;
+		}
+		const hashes: Promise<Uint8Array>[] = [];
+		for (let i = 0; i < this.amount; i++) {
+			hashes.push(this.#msg(i));
+		}
+
+		Promise.all(hashes)
+			.then((garbage) => {
+				try {
+					// Oof this is rough.
+					// Only way I could figure this out though.
+					const msg = new cpnp.Message();
+					const gcg = msg.initRoot(GameClientGarbage);
+					const hshs = gcg._initHash(this.amount);
+					for (let i = 0; i < this.amount; i++) {
+						const data = hshs.at(i);
+						data._initData(garbage[i].length);
+						data.data.copyBuffer(garbage[i]);
+						hshs.set(1, data);
+					}
+					// console.log(gcg.hash.at(1).data.toString());
+					wtStore.SendStreamMsg(OpCodes.CGarbage, msg).then(() => {
+						this.sent++;
+					});
+					this.wait = true;
+				} catch (e) {
+					console.log('failed sending garbage', e);
+					window.clearInterval(this.#timeoutID);
+					this.reset(0, 0);
+				}
+			})
+			.catch(() => {
+				this.reset(0, 0);
+			});
+	};
+
+	reset = (amount: number, per: number, base: Uint8Array | null = null) => {
+		window.clearInterval(this.#timeoutID);
+		this.amount = amount;
+		this.per = per;
+		if (base) {
+			this.base = base;
+		} else {
+			this.base = new Uint8Array();
+		}
+
+		this.wait = true;
+		if (amount <= 0 || per <= 0) {
+			// Nothing
+		} else {
+			this.#timeoutID = window.setInterval(this.#run, 1000 / this.per);
+		}
+	};
 }
+
+class ClientStore {
+	// This is a dumb way to do messages.
+	messages: string[] = $state([]);
+	user: Player | null = $state(null);
+	// There is probably a bettter way to do this.
+	#playerMap: Map<string, number> = new Map<string, number>();
+	#players: Player[] = $state([]);
+
+	garbage: GarbageStore = new GarbageStore();
+
+	constructor() {
+		// Something here?
+	}
+
+	get players(): Player[] {
+		return this.#players;
+	}
+
+	set players(list: Player[]) {
+		this.#players = list;
+		this.#updatePlayerMap();
+	}
+
+	setGarbage = (amount: number, per: number, base: Uint8Array) => {
+		this.garbage.reset(amount, per, base);
+		this.garbage.wait = false;
+	};
+
+	garbageAck = () => {
+		this.garbage.wait = false;
+	};
+
+	connect = (player: Player, connect: boolean) => {
+		if (connect) {
+			this.#playerMap.set(player.id, this.#players.length);
+			this.#players.push(player);
+			this.messages.push(`Player ${player.name} connected.`);
+		} else {
+			const idx = this.#playerMap.get(player.id);
+			this.messages.push(`Player ${player.name} disconnected.`);
+			if (idx) {
+				delete this.#players[idx];
+				this.#playerMap.delete(player.id);
+			}
+		}
+	};
+
+	move = (player: Player) => {
+		const idx = this.#playerMap.get(player.id);
+		if (idx === undefined) {
+			console.log('no one to move');
+			return;
+		}
+		this.#players[idx] = player;
+	};
+
+	reset = () => {
+		this.messages = [];
+		this.user = null;
+
+		this.#playerMap.clear();
+		this.#players = [];
+	};
+
+	// Probably a smarter way to do this.
+	#updatePlayerMap = () => {
+		this.#playerMap.clear();
+		for (let i = 0; i < this.#players.length; i++) {
+			this.#playerMap.set(this.#players[i].id, i);
+		}
+	};
+}
+
+export const Client = new ClientStore();

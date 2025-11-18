@@ -36,9 +36,15 @@ struct GameServerGarbage {
     per @1 :UInt8;
     # How many per second
 
-    base @2 :Text;
+    base @2 :Data;
     # Base of the message
     # sha1 (base + per.N)
+}
+
+struct GameServerGarbageAck {
+    # Acknowledge a garbage message 
+    ack @0 :UInt32;
+    # Number that was just acknowledged
 }
 
 struct GameServerPlayers {
@@ -59,9 +65,14 @@ struct GameClientMoved {
     y @1 :Int8;
 }
 
+struct GarbageData {
+    # :List(Data) is horrible to work with 
+    data @0 :Data;
+}
+
 struct GameClientGarbage {
     # Garbage Packet
-    text @0 :List(Text);
-    # Maybe use data instead?
+    hash @0 :List(GarbageData);
+    # sha1 (base + per.N)
 }
 

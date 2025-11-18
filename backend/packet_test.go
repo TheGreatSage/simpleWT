@@ -46,12 +46,22 @@ func testMsg(tb testing.TB, writer *PacketWriter) cpnp.GameBroadcastConnect {
 		tb.Fatal(err)
 	}
 
-	err = msg.SetName(faker.Name())
+	player, err := msg.NewPlayer()
 	if err != nil {
 		tb.Fatal(err)
 	}
 
-	err = msg.SetId(faker.UUIDDigit())
+	err = player.SetName(faker.Name())
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	err = player.SetId(faker.UUIDDigit())
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	err = msg.SetPlayer(player)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -77,7 +87,16 @@ func sendMsg(tb testing.TB, writer *PacketWriter, buffer *bytes.Buffer) string {
 		tb.Fatal("no message wrote")
 	}
 
-	name, err := msg.Name()
+	if !msg.HasPlayer() {
+		tb.Fatal("no player wrote")
+	}
+
+	player, err := msg.Player()
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	name, err := player.Name()
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -118,7 +137,16 @@ func verifyMsg(tb testing.TB, reader *PacketReader, buffer *bytes.Buffer, name s
 		tb.Fatal("connection is not valid")
 	}
 
-	got, err := conn.Name()
+	if !conn.HasPlayer() {
+		tb.Fatal("no player wrote")
+	}
+
+	player, err := conn.Player()
+	if err != nil {
+		tb.Fatal(err)
+	}
+
+	got, err := player.Name()
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -182,7 +210,14 @@ func TestDeserialize(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := msg.Name()
+		if !msg.HasPlayer() {
+			t.Fatal("no player wrote")
+		}
+		player, err := msg.Player()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := player.Name()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -195,7 +230,14 @@ func TestDeserialize(t *testing.T) {
 		if !valid {
 			t.Fatal("message is not valid")
 		}
-		got, err := msg.Name()
+		if !msg.HasPlayer() {
+			t.Fatal("no player wrote")
+		}
+		player, err := msg.Player()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := player.Name()
 		if err != nil {
 			t.Fatal(err)
 		}

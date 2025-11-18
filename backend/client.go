@@ -10,9 +10,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"sync"
+	"sync/atomic"
 	"time"
 
+	"capnproto.org/go/capnp/v3"
 	"github.com/quic-go/webtransport-go"
 
 	"simpleWT/backend/cpnp"
@@ -35,14 +36,13 @@ type Client struct {
 	writer *PacketWriter
 	reader *PacketReader
 
-	sendMutex sync.Mutex
-
 	// Close chan
 	Closing chan struct{}
 
+	garbageWait   atomic.Bool
 	garbageTicker *time.Ticker
 	garbageAmount int
-	garbageBase   string
+	garbageBase   []byte
 }
 
 // ClientConnection
@@ -58,6 +58,8 @@ type ClientConnection struct {
 	WTPort   string
 }
 
+// ClientConnect
+// Creates and connects a client
 func ClientConnect(cc ClientConnection) (*Client, error) {
 	if cc.Name == "" {
 		return nil, errors.New("no client name")
@@ -121,6 +123,8 @@ func ClientConnect(cc ClientConnection) (*Client, error) {
 		Closing:       make(chan struct{}),
 	}
 
+	client.garbageWait.Store(false)
+
 	client.setupHandlers()
 
 	go client.HandleStream()
@@ -129,6 +133,8 @@ func ClientConnect(cc ClientConnection) (*Client, error) {
 	return client, nil
 }
 
+// HandleStream
+// Accepts a stream from the server and starts reading from it.
 func (c *Client) HandleStream() {
 	stream, err := c.Sess.AcceptStream(context.Background())
 	if err != nil {
@@ -163,7 +169,10 @@ func (c *Client) Run() {
 			if !ok {
 				return
 			}
+			// Not sure if the mutex is needed.
+			c.reader.mu.Lock()
 			fun(packet.Payload)
+			c.reader.mu.Unlock()
 		}
 	}
 }
@@ -179,59 +188,73 @@ func (c *Client) runGarbage() {
 		case <-c.Closing:
 			return
 		case <-c.garbageTicker.C:
-			c.sendMutex.Lock()
-			msg, err := NewMessage(c.writer, cpnp.NewRootGameClientGarbage)
-			if err != nil {
+			// Bad way to do acks
+			// you miss a whole tick
+			if c.garbageWait.Load() {
+				goto cRunGarbage
+			}
+			// False is an error
+			if !c.sendGarbage() {
 				c.garbageTicker.Stop()
-				c.sendMutex.Unlock()
-				continue
+				goto cRunGarbage
 			}
-			if c.garbageAmount == 0 {
-				c.sendMutex.Unlock()
-				c.garbageTicker.Stop()
-				continue
-			}
-			textList, err := msg.NewText(int32(c.garbageAmount))
-			if err != nil {
-				c.sendMutex.Unlock()
-				c.garbageTicker.Stop()
-				continue
-			}
-			if !textList.IsValid() {
-				c.sendMutex.Unlock()
-				c.garbageTicker.Stop()
-				continue
-			}
-			for i := range c.garbageAmount {
-				if i > textList.Len() {
-					log.Println("Something is wrong")
-					c.garbageTicker.Stop()
-					c.sendMutex.Unlock()
-					goto cRunGarbage
-				}
-				// Probably wrong way to do this
-				sh := sha1.Sum([]byte(fmt.Sprintf("%s%d", c.garbageBase, i)))
-				err = textList.Set(i, fmt.Sprintf("%s", sh))
-				if err != nil {
-					c.garbageTicker.Stop()
-					c.sendMutex.Unlock()
-					goto cRunGarbage
-				}
-			}
-			err = msg.SetText(textList)
-			if err != nil {
-				c.garbageTicker.Stop()
-				c.sendMutex.Unlock()
-				continue
-			}
-			_, err = SendStream(c.writer, c.Stream, msg.Message(), OpCodeCGarbage)
-			if err != nil {
-				log.Printf("Error sending garbage message: %v\n", err)
-				c.garbageTicker.Stop()
-				c.sendMutex.Unlock()
-				continue
-			}
-			c.sendMutex.Unlock()
 		}
 	}
+}
+
+func (c *Client) sendGarbage() bool {
+	c.writer.mu.Lock()
+	defer c.writer.mu.Unlock()
+
+	// Create message
+	// msg, err := NewMessage(c.writer, cpnp.NewRootGameClientGarbage)
+	_, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
+	if err != nil {
+		return false
+	}
+	msg, err := cpnp.NewRootGameClientGarbage(seg)
+	if err != nil || !msg.IsValid() || c.garbageAmount == 0 {
+		return false
+	}
+
+	// Create hashes
+	hashes, err := msg.NewHash(int32(c.garbageAmount))
+	if err != nil || !hashes.IsValid() {
+		return false
+	}
+
+	for i := range hashes.Len() {
+		garb := hashes.At(i)
+
+		if !garb.IsValid() {
+			return false
+		}
+
+		// Probably wrong way to do hash
+		sh := sha1.Sum([]byte(fmt.Sprintf("%s%d", c.garbageBase, i)))
+
+		// Why does this fail?
+		err = garb.SetData(sh[:])
+		if err != nil {
+			return false
+		}
+
+		// _ = hashes.Set(i, garb)
+	}
+
+	// Set hashes back
+	err = msg.SetHash(hashes)
+	if err != nil {
+		return false
+	}
+
+	// Write
+	_, err = SendStream(c.writer, c.Stream, msg.Message(), OpCodeCGarbage)
+	if err != nil {
+		return false
+	}
+
+	// Wait for ack
+	c.garbageWait.Store(true)
+	return true
 }

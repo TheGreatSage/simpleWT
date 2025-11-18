@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"capnproto.org/go/capnp/v3"
+
 	"simpleWT/backend/cpnp"
 )
 
@@ -16,6 +18,7 @@ func (c *Client) setupHandlers() {
 	c.AddHandler(OpCodeBChat, c.HandleBChat)
 	c.AddHandler(OpCodeSGarbage, c.HandleGarbageRequest)
 	c.AddHandler(OpCodeSPlayers, c.HandlePlayers)
+	c.AddHandler(OpCodeSGarbageAck, c.HandleGarbageAck)
 }
 
 // HandlePing
@@ -26,9 +29,15 @@ func (c *Client) HandlePing(payload []byte) {
 	if !ok {
 		log.Printf("Client: Invalid ping")
 	}
-	c.sendMutex.Lock()
-	defer c.sendMutex.Unlock()
-	msg, err := NewMessage(c.writer, cpnp.NewRootHeartbeat)
+	c.writer.mu.Lock()
+	defer c.writer.mu.Unlock()
+
+	_, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
+	if err != nil {
+		return
+	}
+	msg, err := cpnp.NewRootHeartbeat(seg)
+	// msg, err := NewMessage(c.writer, cpnp.NewRootHeartbeat)
 	if err != nil {
 		log.Printf("Client: Error creating heartbeat: %v\n", err)
 		return
@@ -58,8 +67,12 @@ func (c *Client) HandleBConnect(payload []byte) {
 		log.Printf("Client: Error getting player: %v\n", err)
 		return
 	}
-	if !who.HasId() || !who.HasName() {
-		log.Println("Client: Invalid connect message")
+	if !who.HasId() {
+		log.Println("Client: No ID in connect message")
+		return
+	}
+	if !who.HasName() {
+		log.Println("Client: No Name in connect message")
 		return
 	}
 
@@ -102,7 +115,8 @@ func (c *Client) HandleBPlayerMoved(payload []byte) {
 	if !who.HasId() {
 		return
 	}
-	uid, err := who.Id()
+	// uid, err := who.Id()
+	_, err = who.Id()
 	if err != nil {
 		log.Printf("Client: Error getting id: %v\n", err)
 		return
@@ -123,7 +137,7 @@ func (c *Client) HandleBPlayerMoved(payload []byte) {
 	}
 	out := fmt.Sprintf("%s %s", ydir, xdir)
 	out = strings.TrimLeft(out, " ")
-	log.Printf("Client: Player (%s): Moved %s", uid, out)
+	// log.Printf("Client: Player (%s): Moved %s", uid, out)
 }
 
 // HandleBChat
@@ -190,6 +204,15 @@ func (c *Client) HandleGarbageRequest(payload []byte) {
 	c.garbageBase = base
 
 	// log.Printf("Client %s: Garbage needed %d/%ds", c.Name, c.garbageAmount, msg.Per())
+}
+
+func (c *Client) HandleGarbageAck(payload []byte) {
+	_, valid := DeserializeValid(c.reader, payload, cpnp.ReadRootGameServerGarbageAck)
+	if !valid {
+		log.Printf("Client %s: Invalid garbage ack. Len %d\n", c.Name, len(payload))
+		return
+	}
+	c.garbageWait.Store(false)
 }
 
 func (c *Client) HandlePlayers(payload []byte) {

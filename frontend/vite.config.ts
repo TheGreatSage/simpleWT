@@ -9,7 +9,7 @@ export default defineConfig({
 				target: 'http://localhost:8775/hash',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/hash/, '')
-			},
+			}
 		}
 	}
 });

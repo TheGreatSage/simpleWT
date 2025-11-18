@@ -1,25 +1,25 @@
 export enum OpCodes {
-    Unused = 0,
-    
-    // Utility start
-    Utility,
-    Heartbeat,
+	Unused = 0,
 
-    //Broadcast
-    Broadcasts,
-    BConnect,
-    BPlayerMoved,
-    BChat,
+	// Utility start
+	Utility,
+	Heartbeat,
 
-    //Server
-    Server,
-    SGarbage,
-    SPlayers,
+	//Broadcast
+	Broadcasts,
+	BConnect,
+	BPlayerMoved,
+	BChat,
 
-    // Client
-    Client,
-    CChat,
-    CMoved,
-    CGarbage
+	//Server
+	Server,
+	SGarbage,
+	SGarbageAck,
+	SPlayers,
 
+	// Client
+	Client,
+	CChat,
+	CMoved,
+	CGarbage
 }

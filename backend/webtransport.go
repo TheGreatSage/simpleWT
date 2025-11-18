@@ -94,7 +94,7 @@ func (s *WebTransportServer) Start() bool {
 		}
 	}()
 
-	go s.sessions.Run()
+	go s.sessions.Run(s.world)
 
 	return true
 }
@@ -104,6 +104,7 @@ func (s *WebTransportServer) Stop() {
 		s.sessions.Shutdown()
 		s.sessions = nil
 	}
+
 	if s.wt != nil {
 		// Not sure this actually gracefully shuts down or not?
 		// TODO: Figure out graceful shutdown.
@@ -209,10 +210,13 @@ func (s *WebTransportServer) handleWT() http.HandlerFunc {
 		clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 		existing, err := s.sessions.GetValidSession(uid, clientIP)
 		if err == nil {
+			// s.sessions.
 			log.Printf("Reconnecting session %s from %s\n", uid, clientIP)
 			session = existing
 			// TODO: Test reconnect
-			err = session.Reconnect()
+			// This doesn't reset the world connection.
+			err = session.Reconnect(sess)
+			s.world.Reconnect(session)
 		}
 
 		if session == nil {

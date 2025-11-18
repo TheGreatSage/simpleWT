@@ -476,22 +476,17 @@ func (s GameServerGarbage) SetPer(v uint8) {
 	capnp.Struct(s).SetUint8(4, v)
 }
 
-func (s GameServerGarbage) Base() (string, error) {
+func (s GameServerGarbage) Base() ([]byte, error) {
 	p, err := capnp.Struct(s).Ptr(0)
-	return p.Text(), err
+	return []byte(p.Data()), err
 }
 
 func (s GameServerGarbage) HasBase() bool {
 	return capnp.Struct(s).HasPtr(0)
 }
 
-func (s GameServerGarbage) BaseBytes() ([]byte, error) {
-	p, err := capnp.Struct(s).Ptr(0)
-	return p.TextBytes(), err
-}
-
-func (s GameServerGarbage) SetBase(v string) error {
-	return capnp.Struct(s).SetText(0, v)
+func (s GameServerGarbage) SetBase(v []byte) error {
+	return capnp.Struct(s).SetData(0, v)
 }
 
 // GameServerGarbage_List is a list of GameServerGarbage.
@@ -509,6 +504,78 @@ type GameServerGarbage_Future struct{ *capnp.Future }
 func (f GameServerGarbage_Future) Struct() (GameServerGarbage, error) {
 	p, err := f.Future.Ptr()
 	return GameServerGarbage(p.Struct()), err
+}
+
+type GameServerGarbageAck capnp.Struct
+
+// GameServerGarbageAck_TypeID is the unique identifier for the type GameServerGarbageAck.
+const GameServerGarbageAck_TypeID = 0xcea719cc37fb77a0
+
+func NewGameServerGarbageAck(s *capnp.Segment) (GameServerGarbageAck, error) {
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 8, PointerCount: 0})
+	return GameServerGarbageAck(st), err
+}
+
+func NewRootGameServerGarbageAck(s *capnp.Segment) (GameServerGarbageAck, error) {
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 8, PointerCount: 0})
+	return GameServerGarbageAck(st), err
+}
+
+func ReadRootGameServerGarbageAck(msg *capnp.Message) (GameServerGarbageAck, error) {
+	root, err := msg.Root()
+	return GameServerGarbageAck(root.Struct()), err
+}
+
+func (s GameServerGarbageAck) String() string {
+	str, _ := text.Marshal(0xcea719cc37fb77a0, capnp.Struct(s))
+	return str
+}
+
+func (s GameServerGarbageAck) EncodeAsPtr(seg *capnp.Segment) capnp.Ptr {
+	return capnp.Struct(s).EncodeAsPtr(seg)
+}
+
+func (GameServerGarbageAck) DecodeFromPtr(p capnp.Ptr) GameServerGarbageAck {
+	return GameServerGarbageAck(capnp.Struct{}.DecodeFromPtr(p))
+}
+
+func (s GameServerGarbageAck) ToPtr() capnp.Ptr {
+	return capnp.Struct(s).ToPtr()
+}
+func (s GameServerGarbageAck) IsValid() bool {
+	return capnp.Struct(s).IsValid()
+}
+
+func (s GameServerGarbageAck) Message() *capnp.Message {
+	return capnp.Struct(s).Message()
+}
+
+func (s GameServerGarbageAck) Segment() *capnp.Segment {
+	return capnp.Struct(s).Segment()
+}
+func (s GameServerGarbageAck) Ack() uint32 {
+	return capnp.Struct(s).Uint32(0)
+}
+
+func (s GameServerGarbageAck) SetAck(v uint32) {
+	capnp.Struct(s).SetUint32(0, v)
+}
+
+// GameServerGarbageAck_List is a list of GameServerGarbageAck.
+type GameServerGarbageAck_List = capnp.StructList[GameServerGarbageAck]
+
+// NewGameServerGarbageAck creates a new list of GameServerGarbageAck.
+func NewGameServerGarbageAck_List(s *capnp.Segment, sz int32) (GameServerGarbageAck_List, error) {
+	l, err := capnp.NewCompositeList(s, capnp.ObjectSize{DataSize: 8, PointerCount: 0}, sz)
+	return capnp.StructList[GameServerGarbageAck](l), err
+}
+
+// GameServerGarbageAck_Future is a wrapper for a GameServerGarbageAck promised by a client call.
+type GameServerGarbageAck_Future struct{ *capnp.Future }
+
+func (f GameServerGarbageAck_Future) Struct() (GameServerGarbageAck, error) {
+	p, err := f.Future.Ptr()
+	return GameServerGarbageAck(p.Struct()), err
 }
 
 type GameServerPlayers capnp.Struct
@@ -761,6 +828,83 @@ func (f GameClientMoved_Future) Struct() (GameClientMoved, error) {
 	return GameClientMoved(p.Struct()), err
 }
 
+type GarbageData capnp.Struct
+
+// GarbageData_TypeID is the unique identifier for the type GarbageData.
+const GarbageData_TypeID = 0xce95049876aae74a
+
+func NewGarbageData(s *capnp.Segment) (GarbageData, error) {
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1})
+	return GarbageData(st), err
+}
+
+func NewRootGarbageData(s *capnp.Segment) (GarbageData, error) {
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1})
+	return GarbageData(st), err
+}
+
+func ReadRootGarbageData(msg *capnp.Message) (GarbageData, error) {
+	root, err := msg.Root()
+	return GarbageData(root.Struct()), err
+}
+
+func (s GarbageData) String() string {
+	str, _ := text.Marshal(0xce95049876aae74a, capnp.Struct(s))
+	return str
+}
+
+func (s GarbageData) EncodeAsPtr(seg *capnp.Segment) capnp.Ptr {
+	return capnp.Struct(s).EncodeAsPtr(seg)
+}
+
+func (GarbageData) DecodeFromPtr(p capnp.Ptr) GarbageData {
+	return GarbageData(capnp.Struct{}.DecodeFromPtr(p))
+}
+
+func (s GarbageData) ToPtr() capnp.Ptr {
+	return capnp.Struct(s).ToPtr()
+}
+func (s GarbageData) IsValid() bool {
+	return capnp.Struct(s).IsValid()
+}
+
+func (s GarbageData) Message() *capnp.Message {
+	return capnp.Struct(s).Message()
+}
+
+func (s GarbageData) Segment() *capnp.Segment {
+	return capnp.Struct(s).Segment()
+}
+func (s GarbageData) Data() ([]byte, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return []byte(p.Data()), err
+}
+
+func (s GarbageData) HasData() bool {
+	return capnp.Struct(s).HasPtr(0)
+}
+
+func (s GarbageData) SetData(v []byte) error {
+	return capnp.Struct(s).SetData(0, v)
+}
+
+// GarbageData_List is a list of GarbageData.
+type GarbageData_List = capnp.StructList[GarbageData]
+
+// NewGarbageData creates a new list of GarbageData.
+func NewGarbageData_List(s *capnp.Segment, sz int32) (GarbageData_List, error) {
+	l, err := capnp.NewCompositeList(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1}, sz)
+	return capnp.StructList[GarbageData](l), err
+}
+
+// GarbageData_Future is a wrapper for a GarbageData promised by a client call.
+type GarbageData_Future struct{ *capnp.Future }
+
+func (f GarbageData_Future) Struct() (GarbageData, error) {
+	p, err := f.Future.Ptr()
+	return GarbageData(p.Struct()), err
+}
+
 type GameClientGarbage capnp.Struct
 
 // GameClientGarbage_TypeID is the unique identifier for the type GameClientGarbage.
@@ -808,25 +952,25 @@ func (s GameClientGarbage) Message() *capnp.Message {
 func (s GameClientGarbage) Segment() *capnp.Segment {
 	return capnp.Struct(s).Segment()
 }
-func (s GameClientGarbage) Text() (capnp.TextList, error) {
+func (s GameClientGarbage) Hash() (GarbageData_List, error) {
 	p, err := capnp.Struct(s).Ptr(0)
-	return capnp.TextList(p.List()), err
+	return GarbageData_List(p.List()), err
 }
 
-func (s GameClientGarbage) HasText() bool {
+func (s GameClientGarbage) HasHash() bool {
 	return capnp.Struct(s).HasPtr(0)
 }
 
-func (s GameClientGarbage) SetText(v capnp.TextList) error {
+func (s GameClientGarbage) SetHash(v GarbageData_List) error {
 	return capnp.Struct(s).SetPtr(0, v.ToPtr())
 }
 
-// NewText sets the text field to a newly
-// allocated capnp.TextList, preferring placement in s's segment.
-func (s GameClientGarbage) NewText(n int32) (capnp.TextList, error) {
-	l, err := capnp.NewTextList(capnp.Struct(s).Segment(), n)
+// NewHash sets the hash field to a newly
+// allocated GarbageData_List, preferring placement in s's segment.
+func (s GameClientGarbage) NewHash(n int32) (GarbageData_List, error) {
+	l, err := NewGarbageData_List(capnp.Struct(s).Segment(), n)
 	if err != nil {
-		return capnp.TextList{}, err
+		return GarbageData_List{}, err
 	}
 	err = capnp.Struct(s).SetPtr(0, l.ToPtr())
 	return l, err

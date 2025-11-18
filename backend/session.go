@@ -48,6 +48,8 @@ type Session struct {
 	conn   *webtransport.Session
 
 	// This is probably crap
+	// It is, for every session we have to save each handler func pointer.
+	// I'll think of a better way later.
 	handlers map[uint16]SessionPacketHandlerFunc
 	incoming chan Packet
 
@@ -59,10 +61,6 @@ type Session struct {
 	// writeMsgBuffer *capnp.Message
 	// writeBuffer []byte
 
-	// Added to hunt down a client issue.
-	// Not sure its needed, maybe just better use of writer.mu?
-	sendMutex sync.Mutex
-
 	// Ping info
 	PingWait    time.Duration
 	PingPeriod  time.Duration
@@ -71,7 +69,7 @@ type Session struct {
 
 	// Close channel
 	// Maybe do a context?
-	// Couldn't figure those ou though
+	// Couldn't figure those out though
 	Closing chan struct{}
 }
 
@@ -155,7 +153,7 @@ func (m *SessionManager) GetValidSession(id uuid.UUID, ip string) (*Session, err
 
 // Run
 // Prunes sessions every minute
-func (m *SessionManager) Run() {
+func (m *SessionManager) Run(world *GameWorld) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
@@ -163,14 +161,14 @@ func (m *SessionManager) Run() {
 		case <-m.Closing:
 			return
 		case <-ticker.C:
-			m.pruneInactive()
+			m.pruneInactive(world)
 		}
 	}
 }
 
 // pruneInactive
 // Removes sessions that have been inactive for 5 minutes
-func (m *SessionManager) pruneInactive() {
+func (m *SessionManager) pruneInactive(world *GameWorld) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, session := range m.sessions {
@@ -178,12 +176,16 @@ func (m *SessionManager) pruneInactive() {
 			continue
 		}
 		if session.LastActive.Add(time.Minute * 5).Before(time.Now()) {
+			world.Disconnect(session)
 			// Save to disk or something here?
 			delete(m.sessions, session.ID)
 		}
 	}
 }
 
+// Start
+// Starts a session
+// Only fails if it can't open a stream.
 func (s *Session) Start() error {
 	control, err := s.conn.OpenStream()
 	if err != nil {
@@ -201,18 +203,27 @@ func (s *Session) Start() error {
 	return nil
 }
 
-func (s *Session) Reconnect() error {
+// Reconnect
+// Badly implemented reconnect a session.
+func (s *Session) Reconnect(conn *webtransport.Session) error {
 	// This is probably bad.
-	err := s.stream.Close()
+	err := s.Close()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSessionFailedToStart, err)
 	}
+	s.conn = conn
 	return s.Start()
 }
 
+// Close
+// One day this will gracefully close a session
 func (s *Session) Close() error {
 	s.Active.Store(false)
-	close(s.Closing)
+	s.LastActive = time.Now()
+	if s.Closing != nil {
+		close(s.Closing)
+		s.Closing = nil
+	}
 
 	var err error
 	if s.stream != nil {
@@ -231,13 +242,18 @@ func (s *Session) Close() error {
 	return err
 }
 
+// HandleStream
+// Just wrapping the error in packet.HandleStream
 func (s *Session) HandleStream(stream *webtransport.Stream) {
 	err := HandleStream(stream, s.incoming, s.Closing)
 	if err != nil {
 		log.Printf("Error handling stream: %v\n", err)
+		_ = s.Close()
 	}
 }
 
+// StartHeartbeat
+// Starts the heartbeat loop
 func (s *Session) StartHeartbeat() {
 	if s.stream == nil {
 		return
@@ -248,8 +264,12 @@ func (s *Session) StartHeartbeat() {
 	defer ticker.Stop()
 	defer wait.Stop()
 
+	// Send one right away
 	s.lastPing.Store(time.Now().UnixNano())
-	err := QueueMessage(s, OpCodeHeartbeat, cpnp.NewRootHeartbeat, nil)
+	err := QueueMessage(s, OpCodeHeartbeat, cpnp.NewRootHeartbeat, func(h cpnp.Heartbeat) error {
+		h.SetUnix(time.Now().UnixMilli())
+		return nil
+	})
 	if err != nil {
 		log.Printf("Error heartbeat: %v", err)
 	}
@@ -270,15 +290,22 @@ func (s *Session) StartHeartbeat() {
 			wait.Reset(s.PingWait)
 		case <-ticker.C:
 			s.lastPing.Store(time.Now().UnixNano())
-			err := QueueMessage(s, OpCodeHeartbeat, cpnp.NewRootHeartbeat, nil)
+			err := QueueMessage(s, OpCodeHeartbeat, cpnp.NewRootHeartbeat, func(h cpnp.Heartbeat) error {
+				h.SetUnix(time.Now().UnixMilli())
+				return nil
+			})
 			if err != nil {
 				log.Printf("Error heartbeat: %v", err)
+				// Is this ok?
+				_ = s.Close()
+				return
 			}
 			wait.Reset(s.PingWait)
 		}
 	}
 }
 
+// Run reads incoming packets and handles them.
 func (s *Session) Run() {
 	if !s.Active.Load() {
 		return
@@ -293,15 +320,21 @@ func (s *Session) Run() {
 			if !ok {
 				continue
 			}
+			s.reader.mu.Lock()
 			fun(s, packet.Payload)
+			s.reader.mu.Unlock()
 		}
 	}
 }
 
+// AddHandler
+// adds a handler
 func (s *Session) AddHandler(opcode uint16, handler SessionPacketHandlerFunc) {
 	s.handlers[opcode] = handler
 }
 
+// QueueMessage
+// Builds a message to send
 func QueueMessage[T CapnpMessage](s *Session, opcode uint16, ctor func(*capnp.Segment) (T, error), build func(T) error) error {
 	// TODO: Move QueueMessage to packet.go
 	// Not sure the best way to do that though.
@@ -309,8 +342,8 @@ func QueueMessage[T CapnpMessage](s *Session, opcode uint16, ctor func(*capnp.Se
 		return ErrSessionInactive
 	}
 
-	s.sendMutex.Lock()
-	defer s.sendMutex.Unlock()
+	s.writer.mu.Lock()
+	defer s.writer.mu.Unlock()
 	msg, err := NewMessage(s.writer, ctor)
 	if err != nil {
 		return fmt.Errorf("new message: %w", err)

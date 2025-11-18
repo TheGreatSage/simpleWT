@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"sync"
 
 	"capnproto.org/go/capnp/v3"
@@ -31,6 +30,7 @@ const (
 	// Game Server Opcodes
 	_
 	OpCodeSGarbage
+	OpCodeSGarbageAck
 	OpCodeSPlayers
 
 	// Game Client Opcodes
@@ -112,8 +112,8 @@ func (p *PacketWriter) Expand(size int) {
 
 // PacketReader
 // For turning buffers into messages.
-// Should this use a mutex also?
 type PacketReader struct {
+	mu  sync.Mutex
 	msg *capnp.Message
 	buf []byte
 }
@@ -138,9 +138,6 @@ func NewPacketReader() *PacketReader {
 // NewMessage
 // Preps a message to be sent using a PacketWriter
 func NewMessage[T CapnpMessage](w *PacketWriter, ctor func(*capnp.Segment) (T, error)) (T, error) {
-	// Maybe this shouldn't lock the writer and it should be handled by the sender?
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	seg, err := w.msg.Reset(w.arena)
 	if err != nil {
 		var zero T
@@ -213,7 +210,8 @@ func HandleStream(stream io.ReadWriteCloser, handler chan<- Packet, closing <-ch
 	defer func() {
 		err := stream.Close()
 		if err != nil {
-			log.Printf("stream close: %v\n", err)
+			// I'd probably log this but gets annoying on the clients.
+			// log.Printf("stream close: %v\n", err)
 		}
 	}()
 

@@ -158,18 +158,52 @@ export class GameServerGarbage extends cpnp.Struct {
   set per(value: number) {
     cpnp.utils.setUint8(4, value, this);
   }
+  _adoptBase(value: cpnp.Orphan<cpnp.Data>): void {
+    cpnp.utils.adopt(value, cpnp.utils.getPointer(0, this));
+  }
+  _disownBase(): cpnp.Orphan<cpnp.Data> {
+    return cpnp.utils.disown(this.base);
+  }
   /**
 * Base of the message
 * sha1 (base + per.N)
 *
 */
-  get base(): string {
-    return cpnp.utils.getText(0, this);
+  get base(): cpnp.Data {
+    return cpnp.utils.getData(0, this);
   }
-  set base(value: string) {
-    cpnp.utils.setText(0, value, this);
+  _hasBase(): boolean {
+    return !cpnp.utils.isNull(cpnp.utils.getPointer(0, this));
+  }
+  _initBase(length: number): cpnp.Data {
+    return cpnp.utils.initData(0, length, this);
+  }
+  set base(value: cpnp.Data) {
+    cpnp.utils.copyFrom(value, cpnp.utils.getPointer(0, this));
   }
   toString(): string { return "GameServerGarbage_" + super.toString(); }
+}
+/**
+* Acknowledge a garbage message
+*
+*/
+export class GameServerGarbageAck extends cpnp.Struct {
+  static readonly _capnp = {
+    displayName: "GameServerGarbageAck",
+    id: "cea719cc37fb77a0",
+    size: new cpnp.ObjectSize(8, 0),
+  };
+  /**
+* Number that was just acknowledged
+*
+*/
+  get ack(): number {
+    return cpnp.utils.getUint32(0, this);
+  }
+  set ack(value: number) {
+    cpnp.utils.setUint32(0, value, this);
+  }
+  toString(): string { return "GameServerGarbageAck_" + super.toString(); }
 }
 /**
 * List of players
@@ -246,6 +280,36 @@ export class GameClientMoved extends cpnp.Struct {
   toString(): string { return "GameClientMoved_" + super.toString(); }
 }
 /**
+* :List(Data) is horrible to work with
+*
+*/
+export class GarbageData extends cpnp.Struct {
+  static readonly _capnp = {
+    displayName: "GarbageData",
+    id: "ce95049876aae74a",
+    size: new cpnp.ObjectSize(0, 1),
+  };
+  _adoptData(value: cpnp.Orphan<cpnp.Data>): void {
+    cpnp.utils.adopt(value, cpnp.utils.getPointer(0, this));
+  }
+  _disownData(): cpnp.Orphan<cpnp.Data> {
+    return cpnp.utils.disown(this.data);
+  }
+  get data(): cpnp.Data {
+    return cpnp.utils.getData(0, this);
+  }
+  _hasData(): boolean {
+    return !cpnp.utils.isNull(cpnp.utils.getPointer(0, this));
+  }
+  _initData(length: number): cpnp.Data {
+    return cpnp.utils.initData(0, length, this);
+  }
+  set data(value: cpnp.Data) {
+    cpnp.utils.copyFrom(value, cpnp.utils.getPointer(0, this));
+  }
+  toString(): string { return "GarbageData_" + super.toString(); }
+}
+/**
 * Garbage Packet
 *
 */
@@ -255,28 +319,30 @@ export class GameClientGarbage extends cpnp.Struct {
     id: "991d0e65a6c49290",
     size: new cpnp.ObjectSize(0, 1),
   };
-  _adoptText(value: cpnp.Orphan<cpnp.List<string>>): void {
+  static _Hash: cpnp.ListCtor<GarbageData>;
+  _adoptHash(value: cpnp.Orphan<cpnp.List<GarbageData>>): void {
     cpnp.utils.adopt(value, cpnp.utils.getPointer(0, this));
   }
-  _disownText(): cpnp.Orphan<cpnp.List<string>> {
-    return cpnp.utils.disown(this.text);
+  _disownHash(): cpnp.Orphan<cpnp.List<GarbageData>> {
+    return cpnp.utils.disown(this.hash);
   }
   /**
-* Maybe use data instead?
+* sha1 (base + per.N)
 *
 */
-  get text(): cpnp.List<string> {
-    return cpnp.utils.getList(0, cpnp.TextList, this);
+  get hash(): cpnp.List<GarbageData> {
+    return cpnp.utils.getList(0, GameClientGarbage._Hash, this);
   }
-  _hasText(): boolean {
+  _hasHash(): boolean {
     return !cpnp.utils.isNull(cpnp.utils.getPointer(0, this));
   }
-  _initText(length: number): cpnp.List<string> {
-    return cpnp.utils.initList(0, cpnp.TextList, length, this);
+  _initHash(length: number): cpnp.List<GarbageData> {
+    return cpnp.utils.initList(0, GameClientGarbage._Hash, length, this);
   }
-  set text(value: cpnp.List<string>) {
+  set hash(value: cpnp.List<GarbageData>) {
     cpnp.utils.copyFrom(value, cpnp.utils.getPointer(0, this));
   }
   toString(): string { return "GameClientGarbage_" + super.toString(); }
 }
 GameServerPlayers._Players = cpnp.CompositeList(Player);
+GameClientGarbage._Hash = cpnp.CompositeList(GarbageData);
