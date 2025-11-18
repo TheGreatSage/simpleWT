@@ -32,13 +32,6 @@ type GameWorld struct {
 	Closed chan bool
 }
 
-type GameMessage struct {
-	Broadcast bool
-	Session   *Session
-	Msg       *capnp.Message
-	Opcode    uint16
-}
-
 func NewGameWorld(db *DatabaseManager) *GameWorld {
 	gw := &GameWorld{
 		db: db,

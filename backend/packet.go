@@ -80,7 +80,8 @@ type PacketHandler interface {
 	HandlePacket(PacketHeader, []byte)
 }
 
-const PacketBufferSize = 1024 * 8
+// PacketBufferSize TODO: Swap back to large buffer
+const PacketBufferSize = 8
 
 // This might be a bad way to do this
 
@@ -105,8 +106,6 @@ func (p *PacketWriter) GetWriteBuffer() []byte {
 }
 
 func (p *PacketWriter) Expand(size int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.buf = make([]byte, size)
 }
 
@@ -187,7 +186,7 @@ func SendStream(pk PacketWriteSender, stream io.Writer, msg *capnp.Message, opco
 	n, err := capnext.MarshalThree(msg, payload)
 	if err != nil {
 		if errors.Is(err, capnext.ErrBufferTooSmall) {
-			pk.Expand(PacketHeaderLength + n)
+			pk.Expand(PacketHeaderLength + n + 2)
 			return SendStream(pk, stream, msg, opcode)
 		}
 		return 0, fmt.Errorf("send stream %w", err)

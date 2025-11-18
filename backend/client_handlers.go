@@ -42,6 +42,7 @@ func (c *Client) HandlePing(payload []byte) {
 		log.Printf("Client: Error creating heartbeat: %v\n", err)
 		return
 	}
+	msg.SetUnix(time.Now().UnixMilli())
 
 	_, err = SendStream(c.writer, c.Stream, msg.Message(), OpCodeHeartbeat)
 	if err != nil {
@@ -153,19 +154,19 @@ func (c *Client) HandleBChat(payload []byte) {
 		return
 	}
 
-	name, err := msg.Name()
-	if err != nil {
-		log.Printf("Client: Error getting name: %v\n", err)
-		return
-	}
-	chat, err := msg.Text()
-	if err != nil {
-		log.Printf("Client: Error getting chat: %v\n", err)
-		return
-	}
+	// name, err := msg.Name()
+	// if err != nil {
+	// 	log.Printf("Client: Error getting name: %v\n", err)
+	// 	return
+	// }
+	// chat, err := msg.Text()
+	// if err != nil {
+	// 	log.Printf("Client: Error getting chat: %v\n", err)
+	// 	return
+	// }
 
-	// TODO: Truncate user input
-	log.Printf("Client: %s: %s\n", name, chat)
+	// Turned off for go clients
+	// log.Printf("Client: %s: %s\n", name, chat)
 }
 
 func (c *Client) HandleGarbageRequest(payload []byte) {
@@ -202,6 +203,7 @@ func (c *Client) HandleGarbageRequest(payload []byte) {
 	}
 	c.garbageAmount = int(msg.Amount())
 	c.garbageBase = base
+	c.garbageWait.Store(false)
 
 	// log.Printf("Client %s: Garbage needed %d/%ds", c.Name, c.garbageAmount, msg.Per())
 }

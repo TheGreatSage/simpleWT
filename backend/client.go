@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"capnproto.org/go/capnp/v3"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/webtransport-go"
 
 	"simpleWT/backend/cpnp"
@@ -43,6 +43,9 @@ type Client struct {
 	garbageTicker *time.Ticker
 	garbageAmount int
 	garbageBase   []byte
+
+	lastRec  atomic.Int64
+	lastSent atomic.Int64
 }
 
 // ClientConnection
@@ -93,6 +96,9 @@ func ClientConnect(cc ClientConnection) (*Client, error) {
 
 	var headers http.Header
 	var d webtransport.Dialer
+	d.QUICConfig = &quic.Config{
+		EnableDatagrams: true,
+	}
 	// d.QUICConfig.EnableDatagrams = true
 	d.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
@@ -149,9 +155,12 @@ func (c *Client) HandleStream() {
 
 	err = HandleStream(stream, c.incoming, c.Closing)
 	if err != nil {
-		log.Printf("Client stream: %v\n", err)
+		snt := time.Since(time.Unix(0, c.lastSent.Load())).String()
+		rcv := time.Since(time.Unix(0, c.lastRec.Load())).String()
+		log.Printf("Client stream: %v (Sent last: %s, Recv Last: %s)\n", err, snt, rcv)
 	}
 	c.Stream = nil
+	c.Close()
 }
 
 func (c *Client) AddHandler(opcode uint16, handler ClientPacketHandlerFunc) {
@@ -165,6 +174,7 @@ func (c *Client) Run() {
 		case <-c.Closing:
 			return
 		case packet := <-c.incoming:
+			c.lastRec.Store(time.Now().UnixNano())
 			fun, ok := c.handlers[packet.Header.OpCode]
 			if !ok {
 				return
@@ -178,7 +188,10 @@ func (c *Client) Run() {
 }
 
 func (c *Client) Close() {
-	close(c.Closing)
+	if c.Closing != nil {
+		close(c.Closing)
+		c.Closing = nil
+	}
 }
 
 func (c *Client) runGarbage() {
@@ -198,6 +211,7 @@ func (c *Client) runGarbage() {
 				c.garbageTicker.Stop()
 				goto cRunGarbage
 			}
+			c.lastSent.Store(time.Now().UnixNano())
 		}
 	}
 }
@@ -207,12 +221,12 @@ func (c *Client) sendGarbage() bool {
 	defer c.writer.mu.Unlock()
 
 	// Create message
-	// msg, err := NewMessage(c.writer, cpnp.NewRootGameClientGarbage)
-	_, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
-	if err != nil {
-		return false
-	}
-	msg, err := cpnp.NewRootGameClientGarbage(seg)
+	msg, err := NewMessage(c.writer, cpnp.NewRootGameClientGarbage)
+	// _, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
+	// if err != nil {
+	// 	return false
+	// }
+	// msg, err := cpnp.NewRootGameClientGarbage(seg)
 	if err != nil || !msg.IsValid() || c.garbageAmount == 0 {
 		return false
 	}
