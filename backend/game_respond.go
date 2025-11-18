@@ -9,36 +9,27 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"simpleWT/backend/cpnp"
+	"simpleWT/backend/bebop"
 )
 
 func (w *GameWorld) playerConnectedSend(session *Session, name string, connect, broadcast bool) {
 	w.writer.mu.Lock()
 	defer w.writer.mu.Unlock()
-	msg, err := NewMessage(w.writer, cpnp.NewRootGameBroadcastConnect)
-	if err != nil {
-		log.Printf("Error creating connect packet: %v", err)
-		return
-	}
 
 	// Is there a way to get rid of creating something new here?
-	pl, err := msg.NewPlayer()
-	if err != nil {
-		log.Printf("Error creating connect packet: %v", err)
-		return
+	msg := &bebop.GameBroadcastConnect{
+		Player: bebop.Player{
+			ID:   session.ID.String(),
+			Name: name,
+		},
+		Connected: connect,
 	}
 
-	_ = pl.SetId(session.ID.String())
-	_ = pl.SetName(name)
-	_ = msg.SetPlayer(pl)
-
-	msg.SetConnected(connect)
-
 	if broadcast {
-		w.Broadcast(msg.Message(), OpCodeBConnect)
+		w.Broadcast(msg, OpCodeBConnect)
 	} else {
 		session.writer.mu.Lock()
-		_, err = SendStream(w.writer, session.stream, msg.Message(), OpCodeBConnect)
+		_, err := SendStream(w.writer, session.stream, msg, OpCodeBConnect)
 		session.writer.mu.Unlock()
 		if err != nil {
 			log.Printf("Error sending packet: %v\n", err)
@@ -47,46 +38,23 @@ func (w *GameWorld) playerConnectedSend(session *Session, name string, connect, 
 }
 
 func (w *GameWorld) sendPlayers(s *Session) {
-	type player struct {
-		X, Y int
-		Name string
-		ID   string
-	}
-	var players []player
+
+	var players []bebop.Player
 	w.pmu.RLock()
 	for s, p := range w.Players {
 		// Maybe lock the player?
-		players = append(players, player{p.X, p.Y, p.Name, s.ID.String()})
+		players = append(players, bebop.Player{X: p.X, Y: p.Y, Name: p.Name, ID: s.ID.String()})
 	}
 	w.pmu.RUnlock()
 
 	w.writer.mu.Lock()
 	defer w.writer.mu.Unlock()
 
-	msg, err := NewMessage(w.writer, cpnp.NewRootGameServerPlayers)
-	if err != nil {
-		log.Printf("Error sending players packet: %v", err)
-		return
-	}
-	pList, err := msg.NewPlayers(int32(len(players)))
-	if err != nil {
-		log.Printf("Error sending players packet: %v", err)
-		return
-	}
-	for i := range pList.Len() {
-		currPlayer := pList.At(i)
-		_ = currPlayer.SetName(players[i].Name)
-		currPlayer.SetX(int32(players[i].X))
-		currPlayer.SetY(int32(players[i].Y))
-		_ = currPlayer.SetId(players[i].ID)
-	}
-	err = msg.SetPlayers(pList)
-	if err != nil {
-		log.Printf("Error sending players packet: %v", err)
-		return
+	msg := &bebop.GameServerPlayers{
+		Players: players,
 	}
 
-	_, err = SendStream(w.writer, s.stream, msg.Message(), OpCodeSPlayers)
+	_, err := SendStream(w.writer, s.stream, msg, OpCodeSPlayers)
 	if err != nil {
 		log.Printf("Error sending players packet: %v\n", err)
 	}
@@ -105,8 +73,8 @@ func (w *GameWorld) movePlayer(s *Session, x, y int8) {
 	}
 	// Probably a better way to do this math.
 	// I'm tired though, and it's not a big deal.
-	xx := 0
-	yy := 0
+	xx := int32(0)
+	yy := int32(0)
 	if x > 0 {
 		xx = 1
 	} else if x < 0 {
@@ -144,26 +112,16 @@ func (w *GameWorld) movePlayer(s *Session, x, y int8) {
 	w.writer.mu.Lock()
 	defer w.writer.mu.Unlock()
 
-	msg, err := NewMessage(w.writer, cpnp.NewRootGameBroadcastPlayerMove)
-	if err != nil {
-		log.Printf("Error creating broadcast packet: %v", err)
-		return
+	msg := &bebop.GameBroadcastPlayerMove{
+		Who: bebop.Player{
+			ID:   s.ID.String(),
+			Name: p.Name,
+			X:    p.X,
+			Y:    p.Y,
+		},
 	}
 
-	// Way to get rid of this?
-	who, err := msg.NewWho()
-	if err != nil {
-		log.Printf("Error creating broadcast packet: %v", err)
-		return
-	}
-
-	_ = who.SetId(s.ID.String())
-	_ = who.SetName(p.Name)
-	who.SetX(int32(p.X))
-	who.SetY(int32(p.Y))
-
-	_ = msg.SetWho(who)
-	w.Broadcast(msg.Message(), OpCodeBPlayerMoved)
+	w.Broadcast(msg, OpCodeBPlayerMoved)
 }
 
 func (w *GameWorld) sendChat(s *Session, text string) {
@@ -178,25 +136,12 @@ func (w *GameWorld) sendChat(s *Session, text string) {
 	w.writer.mu.Lock()
 	defer w.writer.mu.Unlock()
 
-	msg, err := NewMessage(w.writer, cpnp.NewRootGameBroadcastChat)
-	if err != nil {
-		log.Printf("Error creating broadcast packet: %v", err)
-		return
+	msg := &bebop.GameBroadcastChat{
+		Text: text,
+		Name: p.Name,
 	}
 
-	err = msg.SetText(text)
-	if err != nil {
-		log.Printf("Error creating broadcast packet: %v", err)
-		return
-	}
-
-	err = msg.SetName(p.Name)
-	if err != nil {
-		log.Printf("Error creating broadcast packet: %v", err)
-		return
-	}
-
-	w.Broadcast(msg.Message(), OpCodeBChat)
+	w.Broadcast(msg, OpCodeBChat)
 }
 
 func (w *GameWorld) sendGarbage(s *Session, reset bool) {
@@ -231,22 +176,15 @@ func (w *GameWorld) sendGarbage(s *Session, reset bool) {
 	s.writer.mu.Lock()
 	defer s.writer.mu.Unlock()
 
-	msg, err := NewMessage(s.writer, cpnp.NewRootGameServerGarbage)
-	if err != nil {
-		log.Printf("Error making garbage packet: %v", err)
-		return
-	}
-	msg.SetAmount(uint32(p.GarbageAmount))
-	// msg.SetSeconds(uint32(sec))
-	msg.SetPer(uint8(per))
-	// log.Printf("Requesting %s: %d/%ds for %ds total of %d base len %d", p.Name, p.GarbageAmount, per, sec, p.GarbageTotal, len(p.GarbageBase))
-	err = msg.SetBase(p.GarbageBase[:])
-	if err != nil {
-		log.Printf("Error making garbage packet: %v", err)
-		return
+	msg := &bebop.GameServerGarbage{
+		Amount: uint32(p.GarbageAmount),
+		Per:    uint8(per),
+		Base:   p.GarbageBase[:],
 	}
 
-	_, err = SendStream(s.writer, s.stream, msg.Message(), OpCodeSGarbage)
+	// log.Printf("Requesting %s: %d/%ds for %ds total of %d base len %d", p.Name, p.GarbageAmount, per, sec, p.GarbageTotal, len(p.GarbageBase))
+
+	_, err := SendStream(s.writer, s.stream, msg, OpCodeSGarbage)
 	if err != nil {
 		log.Printf("Error sending garbage packet: %v\n", err)
 	}
@@ -271,15 +209,12 @@ func (w *GameWorld) sendGarbageAck(s *Session) {
 	s.writer.mu.Lock()
 	defer s.writer.mu.Unlock()
 
-	msg, err := NewMessage(s.writer, cpnp.NewRootGameServerGarbageAck)
-	if err != nil {
-		log.Printf("Error making garbage ack packet: %v", err)
-		return
-	}
 	// This should probably be its own-received value not the total left.
-	msg.SetAck(uint32(gTotal))
+	msg := &bebop.GameServerGarbageAck{
+		Ack: uint32(gTotal),
+	}
 
-	_, err = SendStream(s.writer, s.stream, msg.Message(), OpCodeSGarbageAck)
+	_, err := SendStream(s.writer, s.stream, msg, OpCodeSGarbageAck)
 	if err != nil {
 		log.Printf("Error sending garbage ack packet: %v\n", err)
 	}

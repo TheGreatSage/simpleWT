@@ -5,7 +5,7 @@
 	import Map from '$lib/components/map.svelte';
 	import { wtStore } from '$lib/stores/wt.svelte';
 	import { OpCodes } from '$lib/handlers/opcodes';
-	import { GameClientChat } from '$lib/cpnp/game';
+	import { GameClientChat } from '$lib/beop/bops.gen';
 
 	ConnectAllHandlers();
 
@@ -14,9 +14,12 @@
 	let chat_v: string = $state('');
 
 	function chat() {
-		wtStore.SendStreamMessage(OpCodes.CChat, GameClientChat, {
-			text: chat_v
-		});
+		wtStore.SendStreamMsg(
+			OpCodes.CChat,
+			GameClientChat({
+				text: chat_v
+			})
+		);
 		chat_v = '';
 	}
 </script>

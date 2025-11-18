@@ -1,5 +1,9 @@
 import type { OpCodes } from '$lib/handlers/opcodes';
-import * as cpnp from 'capnp-es';
+import type { BebopRecord } from 'bebop';
+
+interface Decoder<T> {
+	decode(buffer: Uint8Array): T & BebopRecord;
+}
 
 class HandlerStore {
 	#handlers: Map<number, (payload: Uint8Array) => void> = $state(
@@ -10,16 +14,10 @@ class HandlerStore {
 		// Needed?
 	}
 
-	addHandler = <T extends cpnp.Struct>(
-		opcode: OpCodes,
-		struct: Parameters<cpnp.Message['initRoot']>[0] & { prototype: T },
-		handler: (msg: T) => void
-	) => {
+	addHandler = <T>(opcode: OpCodes, struct: Decoder<T>, handler: (msg: T) => void) => {
 		this.#handlers.set(opcode, (buf: Uint8Array) => {
 			try {
-				const reader = new cpnp.Message(buf, false);
-				const root = reader.getRoot(struct);
-				handler(root as T);
+				handler(struct.decode(buf));
 			} catch (e) {
 				console.error('Decode opcode error.', opcode, e);
 			}

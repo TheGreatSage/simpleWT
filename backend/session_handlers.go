@@ -3,12 +3,13 @@ package backend
 import (
 	"log"
 
-	"simpleWT/backend/cpnp"
+	"simpleWT/backend/bebop"
 )
 
 func (s *Session) HandlePong(_ *Session, payload []byte) {
-	_, valid := DeserializeValid(s.reader, payload, cpnp.ReadRootHeartbeat)
-	if !valid {
+	var msg bebop.Heartbeat
+	n, err := msg.UnmarshalBebop(payload)
+	if err != nil || n == 0 {
 		log.Println("Invalid ping.", s.ID)
 		return
 	}

@@ -1,5 +1,5 @@
-import { Heartbeat } from '$lib/cpnp/control';
 import {
+	Heartbeat,
 	GameBroadcastChat,
 	GameBroadcastConnect,
 	GameBroadcastPlayerMove,
@@ -7,7 +7,7 @@ import {
 	GameServerGarbageAck,
 	GameServerPlayers,
 	Player
-} from '$lib/cpnp/game';
+} from '$lib/beop/bops.gen';
 import { Client } from '$lib/stores/client.svelte';
 import { opHandlers } from '$lib/stores/handlers.svelte';
 import { wtStore } from '$lib/stores/wt.svelte';
@@ -31,16 +31,16 @@ function HandlePing(msg: Heartbeat) {
 	if (!msg) {
 		return;
 	}
-	wtStore.SendStreamMessage(OpCodes.Heartbeat, Heartbeat, {
-		unix: BigInt(Date.now())
-	});
+	wtStore.SendStreamMsg(
+		OpCodes.Heartbeat,
+		Heartbeat({
+			unix: BigInt(Date.now())
+		})
+	);
 }
 
 function HandleBConnect(msg: GameBroadcastConnect) {
 	if (!msg) {
-		return;
-	}
-	if (!msg._hasPlayer()) {
 		return;
 	}
 	// Hope that the first connection sets the player.
@@ -53,9 +53,6 @@ function HandleBConnect(msg: GameBroadcastConnect) {
 
 function HandleBPlayerMoved(msg: GameBroadcastPlayerMove) {
 	if (!msg) {
-		return;
-	}
-	if (!msg._hasWho()) {
 		return;
 	}
 	Client.move(msg.who);
@@ -73,11 +70,11 @@ function HandleGarbageRequest(msg: GameServerGarbage) {
 	if (!msg) {
 		return;
 	}
-	if (!msg._hasBase() || msg.base === undefined || msg.base.length != 20) {
-		console.error('garbage reqeust has no base!');
+	if (msg.base == null || msg.base === undefined || msg.base.length != 20) {
+		console.error('garbage reqeust has no base!', msg.base);
 		return;
 	}
-	Client.setGarbage(msg.amount, msg.per, msg.base.toUint8Array());
+	Client.setGarbage(msg.amount, msg.per, msg.base);
 }
 
 function HandleServerGarbageAck(msg: GameServerGarbageAck) {

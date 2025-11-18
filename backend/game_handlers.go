@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"log"
 
-	"simpleWT/backend/cpnp"
+	"simpleWT/backend/bebop"
 )
 
 var (
-	ErrGameGarbageInvalid  = errors.New("garbage invalid")
 	ErrGameGarbageHash     = errors.New("garbage hash invalid")
 	ErrGameGarbageAmount   = errors.New("garbage amount invalid")
-	ErrGameGarbageData     = errors.New("garbage data invalid")
 	ErrGameGarbageMismatch = errors.New("garbage mismatch")
 )
 
@@ -28,39 +26,28 @@ func (w *GameWorld) connectOpcodes(s *Session) {
 }
 
 func (w *GameWorld) HandleClientChat(s *Session, payload []byte) {
-	msg, valid := DeserializeValid(s.reader, payload, cpnp.ReadRootGameClientChat)
-	if !valid {
-		return
-	}
-	if !msg.HasText() {
-		return
-	}
-	txt, err := msg.Text()
+	var msg bebop.GameClientChat
+	_, err := msg.UnmarshalBebop(payload)
 	if err != nil {
 		return
 	}
-	w.sendChat(s, txt)
+	w.sendChat(s, msg.Text)
 }
 
 func (w *GameWorld) HandleClientMoved(s *Session, payload []byte) {
-	msg, valid := DeserializeValid(s.reader, payload, cpnp.ReadRootGameClientMoved)
-	if !valid {
+	var msg bebop.GameClientMoved
+	_, err := msg.UnmarshalBebop(payload)
+	if err != nil {
 		// Print invalid
 		return
 	}
 
-	w.movePlayer(s, msg.X(), msg.Y())
+	w.movePlayer(s, int8(msg.X), int8(msg.Y))
 }
 
 func (w *GameWorld) HandleClientGarbage(s *Session, payload []byte) {
-	msg, valid := DeserializeValid(s.reader, payload, cpnp.ReadRootGameClientGarbage)
-	if !valid {
-		return
-	}
-	if !msg.HasHash() {
-		return
-	}
-	txt, err := msg.Hash()
+	var msg bebop.GameClientGarbage
+	_, err := msg.UnmarshalBebop(payload)
 	if err != nil {
 		return
 	}
@@ -72,7 +59,7 @@ func (w *GameWorld) HandleClientGarbage(s *Session, payload []byte) {
 		return
 	}
 
-	needNew, err := p.HandleGarbage(txt)
+	needNew, err := p.HandleGarbage(msg.Hashes)
 	if err != nil {
 		log.Println("errored", err)
 		p.mu.Lock()
@@ -97,32 +84,19 @@ func (w *GameWorld) HandleClientGarbage(s *Session, payload []byte) {
 	}
 }
 
-func (p *Player) HandleGarbage(hashes cpnp.GarbageData_List) (bool, error) {
+func (p *Player) HandleGarbage(hashes []bebop.GarbageData) (bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if !hashes.IsValid() {
-		log.Println("invalid hashes")
-		return false, ErrGameGarbageInvalid
-	}
-
-	ln := hashes.Len()
+	ln := len(hashes)
 	if ln != p.GarbageAmount {
-		log.Printf("Player %s, garbage len %d != %d\n", p.Name, hashes.Len(), p.GarbageAmount)
+		log.Printf("Player %s, garbage len %d != %d\n", p.Name, ln, p.GarbageAmount)
 		return false, ErrGameGarbageAmount
 	}
 
 	for i := range ln {
-		msg := hashes.At(i)
-		if !msg.HasData() {
-			return true, ErrGameGarbageData
-		}
+		data := hashes[i].Data
 
-		data, err := msg.Data()
-		if err != nil {
-			log.Println("No data", err)
-			return true, err
-		}
 		// A sha1 hash is of len 20
 		if len(data) != 20 {
 			log.Println("hash length != 20", len(data))

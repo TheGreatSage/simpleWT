@@ -12,7 +12,7 @@ const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
-	globalIgnores(['src/lib/cpnp']),
+	globalIgnores(['src/lib/cpnp', 'src/lib/beop']),
 	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,

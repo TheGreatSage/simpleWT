@@ -1,9 +1,8 @@
 import { b64decode } from '$lib/utils/base64';
 import { opHandlers } from './handlers.svelte';
-import * as cpnp from 'capnp-es';
-import { setStructFields } from '$lib/utils/capnp';
 import { Client } from './client.svelte';
 import { Uint8ArrayConcat } from '$lib/utils/uint8array';
+import type { BebopRecord } from 'bebop';
 
 // Dummy interface for type checking WebTransport
 interface WebTransport {
@@ -115,44 +114,13 @@ class WebTransportStore {
 		}
 	};
 
-	SendStreamMessage = async <T extends cpnp.Struct>(
-		opcode: number,
-		struct: Parameters<cpnp.Message['initRoot']>[0] & { prototype: T },
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		data: Partial<Record<keyof T, any>> | null
-	): Promise<void> => {
-		if (!this.writer) {
-			this.reset();
-			throw new Error('Stream not open!');
-		}
-		const msg = new cpnp.Message();
-		const root = msg.initRoot(struct);
-		if (data) {
-			setStructFields(root, data);
-		}
-
-		const payload = new Uint8Array(cpnp.Message.toArrayBuffer(msg));
-
-		// [opcode:u16_le][length:u32_le]
-		const header = new ArrayBuffer(6);
-		// can you use re-use DataView?
-		new DataView(header).setUint16(0, opcode, true);
-		new DataView(header).setUint32(2, payload.length, true);
-
-		// [header][payload]
-		const frame = Uint8ArrayConcat(new Uint8Array(header), payload);
-
-		// console.log("frame", frame);
-		await this.writer.write(frame);
-	};
-
-	SendStreamMsg = async (opcode: number, msg: cpnp.Message) => {
+	SendStreamMsg = async (opcode: number, msg: BebopRecord) => {
 		if (!this.writer) {
 			this.reset();
 			throw new Error('Stream not open!');
 		}
 
-		const payload = new Uint8Array(cpnp.Message.toArrayBuffer(msg));
+		const payload = msg.encode();
 
 		// [opcode:u16_le][length:u32_le]
 		const header = new ArrayBuffer(6);

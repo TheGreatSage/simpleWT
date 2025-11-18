@@ -7,10 +7,11 @@ import (
 	"io"
 	"sync"
 
-	"capnproto.org/go/capnp/v3"
+	beop "wellquite.org/bebop/runtime"
+
 	"github.com/quic-go/webtransport-go"
 
-	"simpleWT/backend/capnext"
+	"simpleWT/backend/bebop"
 )
 
 // OpCodes
@@ -39,11 +40,6 @@ const (
 	OpCodeCMoved
 	OpCodeCGarbage
 )
-
-type CapnpMessage interface {
-	Message() *capnp.Message
-	IsValid() bool
-}
 
 var (
 	ErrStreamNil           = errors.New("stream is nil")
@@ -80,17 +76,15 @@ type PacketHandler interface {
 	HandlePacket(PacketHeader, []byte)
 }
 
-const PacketBufferSize = 1024 * 8
+const PacketBufferSize = 8
 
 // This might be a bad way to do this
 
 // PacketWriter
 // A way to create capnp messages
 type PacketWriter struct {
-	mu    sync.Mutex
-	arena capnp.Arena
-	msg   *capnp.Message
-	buf   []byte
+	mu  sync.Mutex
+	buf []byte
 }
 
 // PacketWriteSender
@@ -105,8 +99,6 @@ func (p *PacketWriter) GetWriteBuffer() []byte {
 }
 
 func (p *PacketWriter) Expand(size int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.buf = make([]byte, size)
 }
 
@@ -114,69 +106,24 @@ func (p *PacketWriter) Expand(size int) {
 // For turning buffers into messages.
 type PacketReader struct {
 	mu  sync.Mutex
-	msg *capnp.Message
 	buf []byte
 }
 
 func NewPacketWriter() *PacketWriter {
-	msg, _, _ := capnp.NewMessage(capnp.SingleSegment(nil))
 	return &PacketWriter{
-		arena: msg.Arena,
-		msg:   msg,
-		buf:   make([]byte, PacketBufferSize),
-	}
-}
-
-func NewPacketReader() *PacketReader {
-	msg, _, _ := capnp.NewMessage(capnp.SingleSegment(nil))
-	return &PacketReader{
-		msg: msg,
 		buf: make([]byte, PacketBufferSize),
 	}
 }
 
-// NewMessage
-// Preps a message to be sent using a PacketWriter
-func NewMessage[T CapnpMessage](w *PacketWriter, ctor func(*capnp.Segment) (T, error)) (T, error) {
-	seg, err := w.msg.Reset(w.arena)
-	if err != nil {
-		var zero T
-		return zero, fmt.Errorf("new message: %w", err)
+func NewPacketReader() *PacketReader {
+	return &PacketReader{
+		buf: make([]byte, PacketBufferSize),
 	}
-	return ctor(seg)
-}
-
-// ReadMessage
-// Unmarshal a byte slice
-func (r *PacketReader) ReadMessage(data []byte) error {
-	return capnp.UnmarshalZeroThree(r.msg, data)
-}
-
-// Deserialize
-// Returns a CapnpMessage that has been unmarshalled
-func Deserialize[T CapnpMessage](r *PacketReader, data []byte, get func(message *capnp.Message) (T, error)) (T, error) {
-	err := r.ReadMessage(data)
-	if err != nil {
-		var zero T
-		return zero, fmt.Errorf("deserialize %w", err)
-	}
-	return get(r.msg)
-}
-
-// DeserializeValid
-// Deserialize and return if valid.
-func DeserializeValid[T CapnpMessage](r *PacketReader, data []byte, get func(message *capnp.Message) (T, error)) (T, bool) {
-	msg, err := Deserialize(r, data, get)
-	if err != nil {
-		var zero T
-		return zero, false
-	}
-	return msg, msg.IsValid()
 }
 
 // SendStream
 // Writes a msg to a stream
-func SendStream(pk PacketWriteSender, stream io.Writer, msg *capnp.Message, opcode uint16) (int, error) {
+func SendStream(pk PacketWriteSender, stream io.Writer, msg beop.Bebop, opcode uint16) (int, error) {
 	if stream == nil {
 		return 0, nil
 	}
@@ -184,18 +131,23 @@ func SendStream(pk PacketWriteSender, stream io.Writer, msg *capnp.Message, opco
 	buf := pk.GetWriteBuffer()
 	payload := buf[PacketHeaderLength:]
 
-	n, err := capnext.MarshalThree(msg, payload)
+	_, err := msg.MarshalBebop(payload)
 	if err != nil {
-		if errors.Is(err, capnext.ErrBufferTooSmall) {
-			pk.Expand(PacketHeaderLength + n)
+		if errors.Is(err, bebop.ErrBufferTooSmall) {
+			pk.Expand(PacketHeaderLength + msg.SizeBebop() + 2)
 			return SendStream(pk, stream, msg, opcode)
 		}
 		return 0, fmt.Errorf("send stream %w", err)
 	}
 
+	n := msg.SizeBebop()
 	binary.LittleEndian.PutUint16(buf[0:2], opcode)
 	binary.LittleEndian.PutUint32(buf[2:PacketHeaderLength], uint32(n))
 
+	// if n > 1024*8 {
+	// 	log.Println("packet too big", n)
+	// 	return 0, fmt.Errorf("packet too big: %d", n)
+	// }
 	return stream.Write(buf[:n+PacketHeaderLength])
 }
 

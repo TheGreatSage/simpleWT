@@ -1,8 +1,7 @@
-import { GameClientGarbage, Player } from '$lib/cpnp/game';
+import { GameClientGarbage, GarbageData, Player } from '$lib/beop/bops.gen';
 import { OpCodes } from '$lib/handlers/opcodes';
 import { Uint8ArrayConcat } from '$lib/utils/uint8array';
 import { wtStore } from './wt.svelte';
-import * as cpnp from 'capnp-es';
 
 class GarbageStore {
 	amount: number = $state(0);
@@ -18,14 +17,16 @@ class GarbageStore {
 		// something
 	}
 
-	async #msg(num: number): Promise<Uint8Array> {
+	async #msg(num: number): Promise<GarbageData> {
 		// This can't be the way to hash a function in js can it?
 		const numbarr = new TextEncoder().encode(`${num}`);
 		const msg = Uint8ArrayConcat(this.base, numbarr);
 		const hashBuf = await crypto.subtle.digest('SHA-1', msg);
 		// const hashArr = Array.from(new Uint8Array(hashBuf));
 		// const hash = hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
-		return new Uint8Array(hashBuf);
+
+		// This right?
+		return { data: new Uint8Array(hashBuf) };
 	}
 
 	#run = () => {
@@ -34,7 +35,7 @@ class GarbageStore {
 		if (this.wait) {
 			return;
 		}
-		const hashes: Promise<Uint8Array>[] = [];
+		const hashes: Promise<GarbageData>[] = [];
 		for (let i = 0; i < this.amount; i++) {
 			hashes.push(this.#msg(i));
 		}
@@ -44,15 +45,8 @@ class GarbageStore {
 				try {
 					// Oof this is rough.
 					// Only way I could figure this out though.
-					const msg = new cpnp.Message();
-					const gcg = msg.initRoot(GameClientGarbage);
-					const hshs = gcg._initHash(this.amount);
-					for (let i = 0; i < this.amount; i++) {
-						const data = hshs.at(i);
-						data._initData(garbage[i].length);
-						data.data.copyBuffer(garbage[i]);
-						hshs.set(1, data);
-					}
+					const msg = GameClientGarbage({ hashes: garbage });
+
 					// console.log(gcg.hash.at(1).data.toString());
 					wtStore.SendStreamMsg(OpCodes.CGarbage, msg).then(() => {
 						this.sent++;
@@ -122,21 +116,21 @@ class ClientStore {
 
 	connect = (player: Player, connect: boolean) => {
 		if (connect) {
-			this.#playerMap.set(player.id, this.#players.length);
+			this.#playerMap.set(player.ID, this.#players.length);
 			this.#players.push(player);
 			this.messages.push(`Player ${player.name} connected.`);
 		} else {
-			const idx = this.#playerMap.get(player.id);
+			const idx = this.#playerMap.get(player.ID);
 			this.messages.push(`Player ${player.name} disconnected.`);
 			if (idx) {
 				delete this.#players[idx];
-				this.#playerMap.delete(player.id);
+				this.#playerMap.delete(player.ID);
 			}
 		}
 	};
 
 	move = (player: Player) => {
-		const idx = this.#playerMap.get(player.id);
+		const idx = this.#playerMap.get(player.ID);
 		if (idx === undefined) {
 			console.log('no one to move');
 			return;
@@ -156,7 +150,7 @@ class ClientStore {
 	#updatePlayerMap = () => {
 		this.#playerMap.clear();
 		for (let i = 0; i < this.#players.length; i++) {
-			this.#playerMap.set(this.#players[i].id, i);
+			this.#playerMap.set(this.#players[i].ID, i);
 		}
 	};
 }

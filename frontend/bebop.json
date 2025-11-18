@@ -1,0 +1,8 @@
+{
+	"include": ["../backend/bebop/*.bop"],
+	"generators": {
+		"ts": {
+			"outFile": "src/lib/beop/bops.gen.ts"
+		}
+	}
+}

@@ -1,0 +1,56 @@
+struct Heartbeat {
+    int64 Unix;
+}
+
+struct Player {
+    string ID;
+    string Name;
+    int32 X;
+    int32 Y;
+}
+
+struct GameBroadcastConnect {
+    Player Player;
+    bool Connected;
+}
+
+struct GameBroadcastChat {
+    string Name;
+    string Text;
+}
+
+struct GameBroadcastPlayerMove {
+    Player Who;
+}
+
+struct GameServerGarbage {
+    uint32 Amount;
+    uint8 Per;
+    byte[] Base;
+}
+
+struct GameServerGarbageAck {
+    uint32 Ack;
+}
+
+struct GameServerPlayers {
+    Player[] Players;
+}
+
+struct GameClientChat {
+    string Text;
+}
+
+struct GameClientMoved {
+    // int8 isn't a thing in JS?
+    byte X;
+    byte Y;
+}
+
+struct GarbageData {
+    byte[] Data;
+}
+
+struct GameClientGarbage {
+    GarbageData[] Hashes;
+}

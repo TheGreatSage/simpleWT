@@ -5,12 +5,12 @@ import (
 	"math/rand/v2"
 	"sync"
 
-	"capnproto.org/go/capnp/v3"
+	beop "wellquite.org/bebop/runtime"
 )
 
 type Player struct {
 	Name string
-	X, Y int
+	X, Y int32
 
 	mu sync.Mutex
 
@@ -30,13 +30,6 @@ type GameWorld struct {
 	reader *PacketReader
 
 	Closed chan bool
-}
-
-type GameMessage struct {
-	Broadcast bool
-	Session   *Session
-	Msg       *capnp.Message
-	Opcode    uint16
 }
 
 func NewGameWorld(db *DatabaseManager) *GameWorld {
@@ -84,8 +77,8 @@ func (w *GameWorld) Connect(session *Session) {
 	w.pmu.Lock()
 	pl := new(Player)
 	pl.Name = name
-	pl.X = rand.IntN(100)
-	pl.Y = rand.IntN(100)
+	pl.X = int32(rand.IntN(100))
+	pl.Y = int32(rand.IntN(100))
 	w.Players[session] = pl
 	w.pmu.Unlock()
 	w.playerConnectedSend(session, name, true, true)
@@ -113,7 +106,7 @@ func (w *GameWorld) Reconnect(session *Session) {
 	w.sendGarbage(session, true)
 }
 
-func (w *GameWorld) Broadcast(msg *capnp.Message, opcode uint16) {
+func (w *GameWorld) Broadcast(msg beop.Bebop, opcode uint16) {
 	w.pmu.RLock()
 	defer w.pmu.RUnlock()
 	for s := range w.Players {

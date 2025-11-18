@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GameClientMoved, Player } from '$lib/cpnp/game';
+	import { GameClientMoved, Player } from '$lib/beop/bops.gen';
 	import { OpCodes } from '$lib/handlers/opcodes';
 	import { Client } from '$lib/stores/client.svelte';
 	import { wtStore } from '$lib/stores/wt.svelte';
@@ -41,13 +41,13 @@
 			for (let i = 0; i < len; i++) {
 				const pl = players[i];
 				ctx.fillStyle = 'red';
-				if (user.id === pl.id) {
+				if (user.ID === pl.ID) {
 					ctx.fillStyle = 'blue';
 				}
 				ctx.beginPath();
 				ctx.ellipse(
-					pl.x * width + width / 2,
-					pl.y * height + height / 2,
+					pl.X * width + width / 2,
+					pl.Y * height + height / 2,
 					width / 2,
 					height / 2,
 					0,
@@ -85,10 +85,13 @@
 	}
 
 	function move(x: number, y: number) {
-		wtStore.SendStreamMessage(OpCodes.CMoved, GameClientMoved, {
-			x: x,
-			y: y
-		});
+		wtStore.SendStreamMsg(
+			OpCodes.CMoved,
+			GameClientMoved({
+				X: x,
+				Y: y
+			})
+		);
 	}
 </script>
 

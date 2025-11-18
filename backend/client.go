@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"capnproto.org/go/capnp/v3"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/webtransport-go"
 
-	"simpleWT/backend/cpnp"
+	"simpleWT/backend/bebop"
 )
 
 // ClientPacketHandlerFunc
@@ -43,6 +43,10 @@ type Client struct {
 	garbageTicker *time.Ticker
 	garbageAmount int
 	garbageBase   []byte
+	garbageBuffer [254]bebop.GarbageData
+
+	lastRec  atomic.Int64
+	lastSent atomic.Int64
 }
 
 // ClientConnection
@@ -93,6 +97,9 @@ func ClientConnect(cc ClientConnection) (*Client, error) {
 
 	var headers http.Header
 	var d webtransport.Dialer
+	d.QUICConfig = &quic.Config{
+		EnableDatagrams: true,
+	}
 	// d.QUICConfig.EnableDatagrams = true
 	d.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
@@ -149,9 +156,12 @@ func (c *Client) HandleStream() {
 
 	err = HandleStream(stream, c.incoming, c.Closing)
 	if err != nil {
-		log.Printf("Client stream: %v\n", err)
+		snt := time.Since(time.Unix(0, c.lastSent.Load())).String()
+		rcv := time.Since(time.Unix(0, c.lastRec.Load())).String()
+		log.Printf("Client stream: %v (Sent last: %s, Recv Last: %s)\n", err, snt, rcv)
 	}
 	c.Stream = nil
+	c.Close()
 }
 
 func (c *Client) AddHandler(opcode uint16, handler ClientPacketHandlerFunc) {
@@ -165,6 +175,7 @@ func (c *Client) Run() {
 		case <-c.Closing:
 			return
 		case packet := <-c.incoming:
+			c.lastRec.Store(time.Now().UnixNano())
 			fun, ok := c.handlers[packet.Header.OpCode]
 			if !ok {
 				return
@@ -178,7 +189,10 @@ func (c *Client) Run() {
 }
 
 func (c *Client) Close() {
-	close(c.Closing)
+	if c.Closing != nil {
+		close(c.Closing)
+		c.Closing = nil
+	}
 }
 
 func (c *Client) runGarbage() {
@@ -198,6 +212,7 @@ func (c *Client) runGarbage() {
 				c.garbageTicker.Stop()
 				goto cRunGarbage
 			}
+			c.lastSent.Store(time.Now().UnixNano())
 		}
 	}
 }
@@ -207,49 +222,19 @@ func (c *Client) sendGarbage() bool {
 	defer c.writer.mu.Unlock()
 
 	// Create message
-	// msg, err := NewMessage(c.writer, cpnp.NewRootGameClientGarbage)
-	_, seg, err := capnp.NewMessage(capnp.SingleSegment(nil))
-	if err != nil {
-		return false
-	}
-	msg, err := cpnp.NewRootGameClientGarbage(seg)
-	if err != nil || !msg.IsValid() || c.garbageAmount == 0 {
-		return false
-	}
+	msg := &bebop.GameClientGarbage{}
 
-	// Create hashes
-	hashes, err := msg.NewHash(int32(c.garbageAmount))
-	if err != nil || !hashes.IsValid() {
-		return false
-	}
+	msg.Hashes = c.garbageBuffer[:c.garbageAmount]
 
-	for i := range hashes.Len() {
-		garb := hashes.At(i)
-
-		if !garb.IsValid() {
-			return false
-		}
-
+	for i := range int32(c.garbageAmount) {
 		// Probably wrong way to do hash
 		sh := sha1.Sum([]byte(fmt.Sprintf("%s%d", c.garbageBase, i)))
 
-		// Why does this fail?
-		err = garb.SetData(sh[:])
-		if err != nil {
-			return false
-		}
-
-		// _ = hashes.Set(i, garb)
-	}
-
-	// Set hashes back
-	err = msg.SetHash(hashes)
-	if err != nil {
-		return false
+		msg.Hashes[i] = bebop.GarbageData{Data: sh[:]}
 	}
 
 	// Write
-	_, err = SendStream(c.writer, c.Stream, msg.Message(), OpCodeCGarbage)
+	_, err := SendStream(c.writer, c.Stream, msg, OpCodeCGarbage)
 	if err != nil {
 		return false
 	}

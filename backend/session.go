@@ -8,11 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"capnproto.org/go/capnp/v3"
 	"github.com/gofrs/uuid/v5"
 	"github.com/quic-go/webtransport-go"
 
-	"simpleWT/backend/cpnp"
+	"simpleWT/backend/bebop"
 )
 
 var (
@@ -266,10 +265,10 @@ func (s *Session) StartHeartbeat() {
 
 	// Send one right away
 	s.lastPing.Store(time.Now().UnixNano())
-	err := QueueMessage(s, OpCodeHeartbeat, cpnp.NewRootHeartbeat, func(h cpnp.Heartbeat) error {
-		h.SetUnix(time.Now().UnixMilli())
-		return nil
-	})
+	var heartbeat bebop.Heartbeat
+	heartbeat.Unix = time.Now().UnixMilli()
+	_, err := SendStream(s.writer, s.stream, &heartbeat, OpCodeHeartbeat)
+
 	if err != nil {
 		log.Printf("Error heartbeat: %v", err)
 	}
@@ -290,10 +289,8 @@ func (s *Session) StartHeartbeat() {
 			wait.Reset(s.PingWait)
 		case <-ticker.C:
 			s.lastPing.Store(time.Now().UnixNano())
-			err := QueueMessage(s, OpCodeHeartbeat, cpnp.NewRootHeartbeat, func(h cpnp.Heartbeat) error {
-				h.SetUnix(time.Now().UnixMilli())
-				return nil
-			})
+			heartbeat.Unix = time.Now().UnixMilli()
+			_, err := SendStream(s.writer, s.stream, &heartbeat, OpCodeHeartbeat)
 			if err != nil {
 				log.Printf("Error heartbeat: %v", err)
 				// Is this ok?
@@ -331,35 +328,4 @@ func (s *Session) Run() {
 // adds a handler
 func (s *Session) AddHandler(opcode uint16, handler SessionPacketHandlerFunc) {
 	s.handlers[opcode] = handler
-}
-
-// QueueMessage
-// Builds a message to send
-func QueueMessage[T CapnpMessage](s *Session, opcode uint16, ctor func(*capnp.Segment) (T, error), build func(T) error) error {
-	// TODO: Move QueueMessage to packet.go
-	// Not sure the best way to do that though.
-	if !s.Active.Load() {
-		return ErrSessionInactive
-	}
-
-	s.writer.mu.Lock()
-	defer s.writer.mu.Unlock()
-	msg, err := NewMessage(s.writer, ctor)
-	if err != nil {
-		return fmt.Errorf("new message: %w", err)
-	}
-	if build != nil {
-		err = build(msg)
-		if err != nil {
-			return fmt.Errorf("build message: %w", err)
-		}
-	}
-
-	// err = s.stream.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	// if err != nil {
-	// 	log.Printf("Error setting write deadline: %v", err)
-	// 	return fmt.Errorf("%w", err)
-	// }
-	_, err = SendStream(s.writer, s.stream, msg.Message(), opcode)
-	return err
 }
