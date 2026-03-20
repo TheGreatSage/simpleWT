@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,6 +28,13 @@ func main() {
 		Addr:    ":8770",
 		Handler: mux,
 	}
+
+	go func() {
+		err := http.ListenAndServe(":8769", nil)
+		if err != nil {
+			log.Println("pprof listen error:", err)
+		}
+	}()
 
 	go func() {
 		err1 := server.ListenAndServe()

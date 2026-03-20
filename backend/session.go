@@ -280,12 +280,14 @@ func (s *Session) StartHeartbeat() {
 		case <-s.Closing:
 			return
 		case <-wait.C:
+			log.Printf("Missed Heartbeat")
 			if s.missedPings >= 3 {
+				log.Printf("Missed Heartbeat x3")
 				// Is this ok?
 				_ = s.Close()
 				return
 			}
-			log.Printf("Missed Heartbeat")
+			s.missedPings++
 			wait.Reset(s.PingWait)
 		case <-ticker.C:
 			s.lastPing.Store(time.Now().UnixNano())

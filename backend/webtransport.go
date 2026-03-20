@@ -22,6 +22,7 @@ type WebTransportServer struct {
 	world    *GameWorld
 	sessions *SessionManager
 
+	h3  *http3.Server
 	wt  *webtransport.Server
 	udp *net.UDPConn
 }
@@ -65,20 +66,24 @@ func (s *WebTransportServer) Start() bool {
 	// QUIC
 	// Are these good defaults? Idk.
 	quicConfig := &quic.Config{
-		MaxStreamReceiveWindow:     4 * 1024 * 1024,
-		MaxConnectionReceiveWindow: 4 * 1024 * 1024,
-		MaxIncomingStreams:         1024,
+		MaxStreamReceiveWindow:           4 * 1024 * 1024,
+		MaxConnectionReceiveWindow:       4 * 1024 * 1024,
+		MaxIncomingStreams:               1024,
+		EnableStreamResetPartialDelivery: true,
 	}
 
+	s.h3 = &http3.Server{
+		TLSConfig:       tlsConfig,
+		EnableDatagrams: true,
+		QUICConfig:      quicConfig,
+		Handler:         WithCORS(http.DefaultServeMux),
+	}
+
+	webtransport.ConfigureHTTP3Server(s.h3)
 	// WebTransportSession Server Setup
 	// TODO: CheckOrigin logic should be looked at.
 	s.wt = &webtransport.Server{
-		H3: http3.Server{
-			TLSConfig:       tlsConfig,
-			EnableDatagrams: true,
-			QUICConfig:      quicConfig,
-			Handler:         WithCORS(http.DefaultServeMux),
-		},
+		H3:          s.h3,
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 

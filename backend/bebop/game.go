@@ -3,13 +3,8 @@
 package bebop
 
 import (
-	"errors"
 	"io"
 	"wellquite.org/bebop/runtime"
-)
-
-var (
-	ErrBufferTooSmall = errors.New("buffer too small")
 )
 
 type Heartbeat struct {
@@ -36,7 +31,7 @@ func (self *Heartbeat) DecodeBebop(reader io.Reader) error {
 func (self *Heartbeat) MarshalBebop(buf []byte) ([]byte, error) {
 	size := 8
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -134,7 +129,7 @@ func (self *Player) DecodeBebop(reader io.Reader) error {
 func (self *Player) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -302,7 +297,7 @@ func (self *GameBroadcastConnect) DecodeBebop(reader io.Reader) error {
 func (self *GameBroadcastConnect) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -420,7 +415,7 @@ func (self *GameBroadcastChat) DecodeBebop(reader io.Reader) error {
 func (self *GameBroadcastChat) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -539,7 +534,7 @@ func (self *GameBroadcastPlayerMove) DecodeBebop(reader io.Reader) error {
 func (self *GameBroadcastPlayerMove) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -634,7 +629,7 @@ func (self *GameServerGarbage) DecodeBebop(reader io.Reader) error {
 func (self *GameServerGarbage) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -777,7 +772,7 @@ func (self *GameServerGarbageAck) DecodeBebop(reader io.Reader) error {
 func (self *GameServerGarbageAck) MarshalBebop(buf []byte) ([]byte, error) {
 	size := 4
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -872,7 +867,7 @@ func (self *GameServerPlayers) DecodeBebop(reader io.Reader) error {
 func (self *GameServerPlayers) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -967,7 +962,7 @@ func (self *GameClientChat) DecodeBebop(reader io.Reader) error {
 func (self *GameClientChat) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -1063,7 +1058,7 @@ func (self *GameClientMoved) DecodeBebop(reader io.Reader) error {
 func (self *GameClientMoved) MarshalBebop(buf []byte) ([]byte, error) {
 	size := 2
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -1182,7 +1177,7 @@ func (self *GarbageData) DecodeBebop(reader io.Reader) error {
 func (self *GarbageData) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -1277,7 +1272,7 @@ func (self *GameClientGarbage) DecodeBebop(reader io.Reader) error {
 func (self *GameClientGarbage) MarshalBebop(buf []byte) ([]byte, error) {
 	size := self.SizeBebop()
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := self.BebopMarshalAt(buf, 0)
 	if err != nil {
@@ -1377,7 +1372,7 @@ func BebopEncodeArrayOfByteEncoder_game(encoder *runtime.Encoder, ary []byte) (e
 func MarshalBebopArrayOfByte_game(buf []byte, ary []byte) ([]byte, error) {
 	size := SizeBebopOfArrayOfByte_game(ary)
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := BebopMarshalArrayOfByteAt_game(buf, 0, ary)
 	if err != nil {
@@ -1494,7 +1489,7 @@ func BebopEncodeArrayOfGarbageDataEncoder_game(encoder *runtime.Encoder, ary []G
 func MarshalBebopArrayOfGarbageData_game(buf []byte, ary []GarbageData) ([]byte, error) {
 	size := SizeBebopOfArrayOfGarbageData_game(ary)
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := BebopMarshalArrayOfGarbageDataAt_game(buf, 0, ary)
 	if err != nil {
@@ -1613,7 +1608,7 @@ func BebopEncodeArrayOfPlayerEncoder_game(encoder *runtime.Encoder, ary []Player
 func MarshalBebopArrayOfPlayer_game(buf []byte, ary []Player) ([]byte, error) {
 	size := SizeBebopOfArrayOfPlayer_game(ary)
 	if len(buf) < size {
-		return nil, ErrBufferTooSmall
+		buf = make([]byte, size)
 	}
 	_, err := BebopMarshalArrayOfPlayerAt_game(buf, 0, ary)
 	if err != nil {

@@ -10,8 +10,6 @@ import (
 	beop "wellquite.org/bebop/runtime"
 
 	"github.com/quic-go/webtransport-go"
-
-	"simpleWT/backend/bebop"
 )
 
 // OpCodes
@@ -131,12 +129,12 @@ func SendStream(pk PacketWriteSender, stream io.Writer, msg beop.Bebop, opcode u
 	buf := pk.GetWriteBuffer()
 	payload := buf[PacketHeaderLength:]
 
+	if len(payload) < msg.SizeBebop() {
+		pk.Expand(PacketHeaderLength + msg.SizeBebop() + 2)
+		return SendStream(pk, stream, msg, opcode)
+	}
 	_, err := msg.MarshalBebop(payload)
 	if err != nil {
-		if errors.Is(err, bebop.ErrBufferTooSmall) {
-			pk.Expand(PacketHeaderLength + msg.SizeBebop() + 2)
-			return SendStream(pk, stream, msg, opcode)
-		}
 		return 0, fmt.Errorf("send stream %w", err)
 	}
 

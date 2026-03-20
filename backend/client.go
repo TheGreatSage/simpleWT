@@ -98,7 +98,8 @@ func ClientConnect(cc ClientConnection) (*Client, error) {
 	var headers http.Header
 	var d webtransport.Dialer
 	d.QUICConfig = &quic.Config{
-		EnableDatagrams: true,
+		EnableDatagrams:                  true,
+		EnableStreamResetPartialDelivery: true,
 	}
 	// d.QUICConfig.EnableDatagrams = true
 	d.TLSClientConfig = &tls.Config{
